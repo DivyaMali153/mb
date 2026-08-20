@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useState } from "react";
 import { Card, CardContent, Grid, Typography } from "@mui/material";
 
@@ -24,61 +26,178 @@ interface BillData {
 
 const ReportSummary = () => {
   const [bills, setBills] = useState<BillData[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // ==================================================
+  // GET BILLS FROM API
+  // ==================================================
+
+  const loadBills = async () => {
+    try {
+      setLoading(true);
+
+      console.log("=================================");
+      console.log("📊 REPORT SUMMARY");
+      console.log("GET /api/bills");
+      console.log("=================================");
+
+      const response = await fetch("/api/bills", {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      console.log("API Response Status:", response.status);
+
+      const result = await response.json();
+
+      console.log("API Response:");
+      console.log(result);
+
+      if (!response.ok || !result.success) {
+        console.error("Failed to load bills:", result.message);
+
+        setBills([]);
+        return;
+      }
+
+      // ----------------------------------------------
+      // GET BILLS FROM API RESPONSE
+      // ----------------------------------------------
+
+      const apiBills: BillData[] = Array.isArray(result.bills)
+        ? result.bills
+        : [];
+
+      console.log("Bills received from API:");
+      console.log(apiBills);
+
+      console.log("Total Bills from bills.json:", apiBills.length);
+
+      setBills(apiBills);
+    } catch (error) {
+      console.error("❌ Error loading bills from API:", error);
+
+      setBills([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ==================================================
+  // LOAD WHEN REPORT PAGE OPENS
+  // ==================================================
 
   useEffect(() => {
-    const data: BillData[] = JSON.parse(localStorage.getItem("Bills") || "[]");
+    loadBills();
 
-    setBills(data);
+    // ----------------------------------------------
+    // OPTIONAL REFRESH EVENT
+    // ----------------------------------------------
+    // EntryPage already dispatches this event after
+    // successful save.
+
+    const handleBillsUpdated = () => {
+      console.log("🔄 Bill updated - refreshing report");
+
+      loadBills();
+    };
+
+    window.addEventListener("billsUpdated", handleBillsUpdated);
+
+    return () => {
+      window.removeEventListener("billsUpdated", handleBillsUpdated);
+    };
   }, []);
+
+  // ==================================================
+  // TOTAL BILLS
+  // ==================================================
 
   const totalBills = bills.length;
 
-  const totalSales = bills.reduce((sum, bill) => sum + bill.total, 0);
+  // ==================================================
+  // TOTAL SALES
+  // ==================================================
+
+  const totalSales = bills.reduce(
+    (sum, bill) => sum + Number(bill.total || 0),
+    0,
+  );
+
+  // ==================================================
+  // CASH SALES
+  // ==================================================
 
   const cashSales = bills
     .filter((bill) => bill.paymentMode === "Cash")
-    .reduce((sum, bill) => sum + bill.total, 0);
+    .reduce((sum, bill) => sum + Number(bill.total || 0), 0);
+
+  // ==================================================
+  // ONLINE SALES
+  // ==================================================
 
   const onlineSales = bills
     .filter((bill) => bill.paymentMode === "Online")
-    .reduce((sum, bill) => sum + bill.total, 0);
+    .reduce((sum, bill) => sum + Number(bill.total || 0), 0);
+
+  // ==================================================
+  // CARDS
+  // ==================================================
 
   const cards = [
     {
       title: "Total Bills",
-      value: totalBills,
+      value: loading ? "..." : totalBills,
       color: "#1976D2",
     },
     {
       title: "Total Sales",
-      value: `₹ ${totalSales.toFixed(2)}`,
+      value: loading ? "..." : `₹ ${totalSales.toFixed(2)}`,
       color: "#2E7D32",
     },
     {
       title: "Cash Collection",
-      value: `₹ ${cashSales.toFixed(2)}`,
+      value: loading ? "..." : `₹ ${cashSales.toFixed(2)}`,
       color: "#EF6C00",
     },
     {
       title: "Online Collection",
-      value: `₹ ${onlineSales.toFixed(2)}`,
+      value: loading ? "..." : `₹ ${onlineSales.toFixed(2)}`,
       color: "#8E24AA",
     },
   ];
 
+  // ==================================================
+  // UI
+  // ==================================================
+
   return (
-    <Grid container spacing={2} sx={{ mt: 2 }}>
+    <Grid
+      container
+      spacing={2}
+      sx={{
+        mt: 2,
+      }}
+    >
       {cards.map((card) => (
-        <Grid key={card.title} size={{ xs: 12, sm: 6, md: 3 }}>
+        <Grid
+          key={card.title}
+          size={{
+            xs: 12,
+            sm: 6,
+            md: 3,
+          }}
+        >
           <Card
             elevation={3}
             sx={{
               borderLeft: `6px solid ${card.color}`,
               borderRadius: 2,
+              height: "100%",
             }}
           >
             <CardContent>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="subtitle1" fontWeight={600}>
                 {card.title}
               </Typography>
 

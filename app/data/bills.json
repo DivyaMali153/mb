@@ -1,0 +1,122 @@
+[
+  {
+    "billNo": 1786447654543,
+    "date": "11/08/2026",
+    "paymentMode": "Cash",
+    "total": 3708,
+    "items": [
+      {
+        "id": 1,
+        "barcode": "",
+        "itemName": "dress",
+        "brand": "",
+        "size": "s",
+        "qty": 2,
+        "rate": 2000,
+        "discount": 10,
+        "gst": 3,
+        "amount": 3708
+      }
+    ]
+  },
+  {
+    "billNo": 1786447694729,
+    "date": "11/08/2026",
+    "paymentMode": "Cash",
+    "total": 3708,
+    "items": [
+      {
+        "id": 1,
+        "barcode": "",
+        "itemName": "pant",
+        "brand": "",
+        "size": "s",
+        "qty": 2,
+        "rate": 2000,
+        "discount": 10,
+        "gst": 3,
+        "amount": 3708
+      }
+    ]
+  },
+  {
+    "billNo": 1786448296182,
+    "date": "11/08/2026",
+    "paymentMode": "Cash",
+    "total": 0,
+    "items": [
+      {
+        "id": 5,
+        "barcode": "",
+        "itemName": "fgf",
+        "brand": "",
+        "size": "",
+        "qty": 0,
+        "rate": 0,
+        "discount": 0,
+        "gst": 0,
+        "amount": 0
+      }
+    ]
+  },
+  {
+    "billNo": 1786448375478,
+    "date": "11/08/2026",
+    "paymentMode": "Cash",
+    "total": 99.99,
+    "items": [
+      {
+        "id": 2,
+        "barcode": "",
+        "itemName": "",
+        "brand": "fdf",
+        "size": "fdssfdsf",
+        "qty": 1,
+        "rate": 100,
+        "discount": 1,
+        "gst": 1,
+        "amount": 99.99
+      }
+    ]
+  },
+  {
+    "billNo": 1786448927985,
+    "date": "11/08/2026",
+    "paymentMode": "Cash",
+    "total": 3960,
+    "items": [
+      {
+        "id": 1,
+        "barcode": "",
+        "itemName": "dress",
+        "brand": "",
+        "size": "M",
+        "qty": 2,
+        "rate": 2000,
+        "discount": 10,
+        "gst": 10,
+        "amount": 3960
+      }
+    ]
+  },
+  {
+    "billNo": 1786449933992,
+    "date": "11/08/2026",
+    "paymentMode": "Cash",
+    "total": 0,
+    "items": [
+      {
+        "id": 1,
+        "barcode": "",
+        "itemName": "",
+        "brand": "sd",
+        "size": "",
+        "qty": 0,
+        "rate": 0,
+        "discount": 0,
+        "gst": 0,
+        "amount": 0
+      }
+    ]
+  }
+]

@@ -97,11 +97,11 @@ export default function EntryTable({ items, setItems }: EntryTableProps) {
     index: number,
     field: keyof BillItem,
     value: string | number,
-    type = "text",
+    type: string = "text",
   ) => (
     <input
       type={type}
-      value={value ?? ""}
+      value={value === 0 ? "" : value}
       onChange={(e) => handleChange(index, field, e.target.value)}
       style={inputStyle}
     />
@@ -176,8 +176,9 @@ export default function EntryTable({ items, setItems }: EntryTableProps) {
                   {renderInput(index, "discount", item.discount, "number")}
                 </TableCell>
 
-                <TableCell sx={rightCell}>{discountRs.toFixed(2)}</TableCell>
-
+                <TableCell sx={rightCell}>
+                  {discountRs === 0 ? "" : discountRs.toFixed(2)}
+                </TableCell>
                 <TableCell sx={inputCell}>
                   {renderInput(index, "gst", item.gst, "number")}
                 </TableCell>
@@ -186,7 +187,9 @@ export default function EntryTable({ items, setItems }: EntryTableProps) {
                   {renderInput(index, "rate", item.rate, "number")}
                 </TableCell>
 
-                <TableCell sx={amountCell}>{item.amount.toFixed(2)}</TableCell>
+                <TableCell sx={amountCell}>
+                  {item.amount === 0 ? "" : item.amount.toFixed(2)}
+                </TableCell>
               </TableRow>
             );
           })}

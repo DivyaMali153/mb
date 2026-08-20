@@ -58,7 +58,9 @@ export default function CalculationPanel({
           <TableRow>
             <TableCell>D1</TableCell>
             <TableCell>Discount</TableCell>
-            <TableCell align="right">0.000</TableCell>
+            <TableCell align="right">
+              {discount === 0 ? "" : discount.toFixed(3)}
+            </TableCell>
             <TableCell align="right">{discount.toFixed(2)}</TableCell>
             <TableCell align="center">-</TableCell>
           </TableRow>
@@ -66,7 +68,9 @@ export default function CalculationPanel({
           <TableRow>
             <TableCell>OC1</TableCell>
             <TableCell>Extra Add</TableCell>
-            <TableCell align="right">0.000</TableCell>
+            <TableCell align="right">
+              {extraAdd === 0 ? "" : extraAdd.toFixed(3)}
+            </TableCell>
             <TableCell align="right">{extraAdd.toFixed(2)}</TableCell>
             <TableCell align="center">+</TableCell>
           </TableRow>
@@ -74,7 +78,9 @@ export default function CalculationPanel({
           <TableRow>
             <TableCell>GST</TableCell>
             <TableCell>GST Tax</TableCell>
-            <TableCell align="right">0.000</TableCell>
+            <TableCell align="right">
+              {gst === 0 ? "" : gst.toFixed(3)}
+            </TableCell>
             <TableCell align="right">{gst.toFixed(2)}</TableCell>
             <TableCell align="center">+</TableCell>
           </TableRow>

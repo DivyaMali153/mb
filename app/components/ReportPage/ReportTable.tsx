@@ -1,21 +1,15 @@
+"use client";
+
 import { useEffect, useState } from "react";
 import {
-  Box,
-  Button,
-  IconButton,
   Paper,
-  Table,
-  TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  TextField,
+  TableBody,
   Typography,
 } from "@mui/material";
-
-import DeleteIcon from "@mui/icons-material/Delete";
-import RefreshIcon from "@mui/icons-material/Refresh";
 
 interface BillItem {
   id: number;
@@ -40,136 +34,255 @@ interface BillData {
 
 const ReportTable = () => {
   const [bills, setBills] = useState<BillData[]>([]);
-  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
 
-  const loadBills = () => {
-    const data: BillData[] = JSON.parse(localStorage.getItem("Bills") || "[]");
+  // ==================================================
+  // LOAD BILLS FROM API
+  // ==================================================
 
-    setBills(data);
+  const loadBills = async () => {
+    try {
+      setLoading(true);
+
+      console.log("=================================");
+      console.log("📋 REPORT TABLE");
+      console.log("GET /api/bills");
+      console.log("=================================");
+
+      const response = await fetch("/api/bills", {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      console.log("API Response Status:", response.status);
+
+      const result = await response.json();
+
+      console.log("API Response:");
+      console.log(result);
+
+      // ----------------------------------------------
+      // API ERROR
+      // ----------------------------------------------
+
+      if (!response.ok || !result.success) {
+        console.error("❌ Failed to load bills:", result.message);
+
+        setBills([]);
+        return;
+      }
+
+      // ----------------------------------------------
+      // GET BILLS FROM API
+      // ----------------------------------------------
+
+      const apiBills: BillData[] = Array.isArray(result.bills)
+        ? result.bills
+        : [];
+
+      console.log("✅ Bills received from bills.json:");
+
+      console.log(apiBills);
+
+      console.log("Total Bills:", apiBills.length);
+
+      setBills(apiBills);
+    } catch (error) {
+      console.error("❌ Error loading bills from API:", error);
+
+      setBills([]);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  // ==================================================
+  // LOAD WHEN PAGE OPENS
+  // ==================================================
 
   useEffect(() => {
     loadBills();
+
+    // ----------------------------------------------
+    // LISTEN WHEN NEW BILL IS SAVED
+    // ----------------------------------------------
+
+    const handleBillsUpdated = () => {
+      console.log("🔄 New bill saved - refreshing ReportTable");
+
+      loadBills();
+    };
+
+    window.addEventListener("billsUpdated", handleBillsUpdated);
+
+    return () => {
+      window.removeEventListener("billsUpdated", handleBillsUpdated);
+    };
   }, []);
 
-  const handleDelete = (billNo: number) => {
-    const updated = bills.filter((bill) => bill.billNo !== billNo);
-
-    localStorage.setItem("Bills", JSON.stringify(updated));
-
-    setBills(updated);
-  };
-
-  const filteredBills = bills.filter((bill) =>
-    bill.billNo.toString().includes(search)
-  );
+  // ==================================================
+  // UI
+  // ==================================================
 
   return (
-    <Paper
+    <TableContainer
+      component={Paper}
       elevation={3}
       sx={{
         mt: 2,
-        p: 2,
         borderRadius: 2,
+        overflow: "hidden",
       }}
     >
-      <Box
-        display="flex"
-        justifyContent="space-between"
-        alignItems="center"
-        mb={2}
-        flexWrap="wrap"
-        gap={2}
+      <table
+        style={{
+          width: "100%",
+          borderCollapse: "collapse",
+        }}
       >
-        <Typography variant="h6" fontWeight={700}>
-          Previous Bills
-        </Typography>
+        {/* ============================================
+            TABLE HEADER
+        ============================================ */}
 
-        <Box display="flex" gap={1}>
-          <TextField
-            size="small"
-            label="Search Bill No"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-
-          <Button
-            variant="contained"
-            startIcon={<RefreshIcon />}
-            onClick={loadBills}
-          >
-            Refresh
-          </Button>
-        </Box>
-      </Box>
-
-      <TableContainer>
-        <Table size="small">
-          <TableHead>
-            <TableRow
+        <TableHead>
+          <TableRow>
+            <TableCell
               sx={{
-                bgcolor: "#EFE3A2",
+                fontWeight: 700,
+                fontSize: 16,
               }}
             >
-              <TableCell align="center">Bill No</TableCell>
+              Bill No
+            </TableCell>
 
-              <TableCell align="center">Date</TableCell>
+            <TableCell
+              sx={{
+                fontWeight: 700,
+                fontSize: 16,
+              }}
+            >
+              Date
+            </TableCell>
 
-              <TableCell align="center">Payment</TableCell>
+            <TableCell
+              sx={{
+                fontWeight: 700,
+                fontSize: 16,
+              }}
+            >
+              Payment
+            </TableCell>
 
-              <TableCell align="center">Items</TableCell>
+            <TableCell
+              sx={{
+                fontWeight: 700,
+                fontSize: 16,
+              }}
+            >
+              Items
+            </TableCell>
 
-              <TableCell align="right">Total</TableCell>
+            <TableCell
+              align="right"
+              sx={{
+                fontWeight: 700,
+                fontSize: 16,
+              }}
+            >
+              Total
+            </TableCell>
+          </TableRow>
+        </TableHead>
 
-              <TableCell align="center">Delete</TableCell>
+        {/* ============================================
+            TABLE BODY
+        ============================================ */}
+
+        <TableBody>
+          {/* ------------------------------------------
+              LOADING
+          ------------------------------------------ */}
+
+          {loading ? (
+            <TableRow>
+              <TableCell
+                colSpan={5}
+                align="center"
+                sx={{
+                  py: 4,
+                }}
+              >
+                <Typography variant="body1" color="text.secondary">
+                  Loading bills...
+                </Typography>
+              </TableCell>
             </TableRow>
-          </TableHead>
+          ) : bills.length === 0 ? (
+            /* ----------------------------------------
+               NO BILLS
+            ---------------------------------------- */
 
-          <TableBody>
-            {filteredBills.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} align="center">
-                  No Bills Found
-                </TableCell>
-              </TableRow>
-            ) : (
-              filteredBills.map((bill) => (
-                <TableRow key={bill.billNo} hover>
-                  <TableCell align="center">{bill.billNo}</TableCell>
+            <TableRow>
+              <TableCell
+                colSpan={5}
+                align="center"
+                sx={{
+                  py: 4,
+                }}
+              >
+                <Typography variant="body1" color="text.secondary">
+                  No bills found
+                </Typography>
+              </TableCell>
+            </TableRow>
+          ) : (
+            /* ----------------------------------------
+               BILLS
+            ---------------------------------------- */
 
-                  <TableCell align="center">{bill.date}</TableCell>
+            bills.map((bill, index) => {
+              // --------------------------------------
+              // TOTAL QUANTITY
+              // --------------------------------------
 
-                  <TableCell align="center">{bill.paymentMode}</TableCell>
+              const totalItems =
+                bill.items?.reduce(
+                  (total, item) => total + Number(item.qty || 0),
+                  0,
+                ) || 0;
 
-                  <TableCell align="center">
-                    {bill.items.filter((x) => x.qty > 0).length}
-                  </TableCell>
+              return (
+                <TableRow key={`${bill.billNo}-${index}`} hover>
+                  {/* Bill Number */}
 
-                  <TableCell
-                    align="right"
-                    sx={{
-                      color: "green",
-                      fontWeight: 700,
-                    }}
-                  >
-                    ₹ {bill.total.toFixed(2)}
-                  </TableCell>
+                  <TableCell>{bill.billNo}</TableCell>
 
-                  <TableCell align="center">
-                    <IconButton
-                      color="error"
-                      onClick={() => handleDelete(bill.billNo)}
-                    >
-                      <DeleteIcon />
-                    </IconButton>
+                  {/* Date */}
+
+                  <TableCell>{bill.date}</TableCell>
+
+                  {/* Payment Mode */}
+
+                  <TableCell>{bill.paymentMode}</TableCell>
+
+                  {/* Total Items */}
+
+                  <TableCell>{totalItems}</TableCell>
+
+                  {/* Total */}
+
+                  <TableCell align="right">
+                    <Typography fontWeight={700}>
+                      ₹ {Number(bill.total || 0).toFixed(2)}
+                    </Typography>
                   </TableCell>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
-    </Paper>
+              );
+            })
+          )}
+        </TableBody>
+      </table>
+    </TableContainer>
   );
 };
 

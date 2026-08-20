@@ -24,6 +24,14 @@ export interface BillItem {
   amount: number;
 }
 
+export interface BillData {
+  billNo: number;
+  date: string;
+  paymentMode: "Cash" | "Online";
+  total: number;
+  items: BillItem[];
+}
+
 const createEmptyRow = (id: number): BillItem => ({
   id,
   barcode: "",
@@ -38,67 +46,285 @@ const createEmptyRow = (id: number): BillItem => ({
 });
 
 export default function EntryPage() {
-  const [billNo] = useState(Date.now());
+  // --------------------------------------------------
+  // BILL NUMBER
+  // --------------------------------------------------
+
+  const [billNo, setBillNo] = useState<number>(() => Date.now());
+
+  // --------------------------------------------------
+  // PAYMENT MODE
+  // --------------------------------------------------
 
   const [paymentMode, setPaymentMode] = useState<"Cash" | "Online">("Cash");
+
+  // --------------------------------------------------
+  // BILL ITEMS
+  // --------------------------------------------------
 
   const [items, setItems] = useState<BillItem[]>(
     Array.from({ length: 10 }, (_, index) => createEmptyRow(index + 1)),
   );
 
+  // --------------------------------------------------
+  // DISCOUNT CALCULATION
+  // --------------------------------------------------
+
   const discount = useMemo(() => {
     return items.reduce((total, item) => {
       const gross = item.qty * item.rate;
-      return total + (gross * item.discount) / 100;
+
+      const discountAmount = (gross * item.discount) / 100;
+
+      return total + discountAmount;
     }, 0);
   }, [items]);
+
+  // --------------------------------------------------
+  // GST CALCULATION
+  // --------------------------------------------------
 
   const gst = useMemo(() => {
     return items.reduce((total, item) => {
       const gross = item.qty * item.rate;
-      const disc = (gross * item.discount) / 100;
-      const taxable = gross - disc;
 
-      return total + (taxable * item.gst) / 100;
+      const discountAmount = (gross * item.discount) / 100;
+
+      const taxableAmount = gross - discountAmount;
+
+      const gstAmount = (taxableAmount * item.gst) / 100;
+
+      return total + gstAmount;
     }, 0);
   }, [items]);
 
+  // --------------------------------------------------
+  // EXTRA ADD
+  // --------------------------------------------------
+
   const extraAdd = 0;
 
+  // --------------------------------------------------
+  // GRAND TOTAL
+  // --------------------------------------------------
+
   const grandTotal = useMemo(() => {
-    return items.reduce((total, item) => total + item.amount, 0);
+    return items.reduce((total, item) => total + Number(item.amount || 0), 0);
   }, [items]);
 
-  const saveBill = () => {
+  // ==================================================
+  // SAVE BILL
+  // ==================================================
+
+  const saveBill = async () => {
+    // ------------------------------------------------
+    // ONLY KEEP ROWS THAT CONTAIN SOME DATA
+    // ------------------------------------------------
+
     const validItems = items.filter(
       (item) =>
         item.barcode.trim() !== "" ||
         item.itemName.trim() !== "" ||
+        item.brand.trim() !== "" ||
+        item.size.trim() !== "" ||
         item.qty > 0 ||
         item.rate > 0,
     );
+
+    // ------------------------------------------------
+    // CHECK IF AT LEAST ONE ITEM EXISTS
+    // ------------------------------------------------
 
     if (validItems.length === 0) {
       alert("Please enter at least one item.");
       return;
     }
 
-    const billData = {
-      billNo,
+    // ------------------------------------------------
+    // CREATE BILL OBJECT
+    // ------------------------------------------------
+
+    const billData: BillData = {
+      billNo: billNo,
       date: new Date().toLocaleDateString(),
-      paymentMode,
+      paymentMode: paymentMode,
       total: grandTotal,
       items: validItems,
     };
 
-    console.log("Bill Saved:", billData);
+    // ------------------------------------------------
+    // CONSOLE - BEFORE API
+    // ------------------------------------------------
 
-    alert("Bill Saved Successfully");
+    console.log("=================================");
+    console.log("SAVE BILL CLICKED");
+    console.log("=================================");
+
+    console.log("Bill data sending to API:");
+    console.log(billData);
+
+    try {
+      // ----------------------------------------------
+      // CALL SAVE BILL API
+      // ----------------------------------------------
+
+      const response = await fetch("/api/bills", {
+        method: "POST",
+
+        headers: {
+          "Content-Type": "application/json",
+        },
+
+        body: JSON.stringify(billData),
+      });
+
+      // ----------------------------------------------
+      // CONSOLE - API STATUS
+      // ----------------------------------------------
+
+      console.log("API Response Status:", response.status);
+
+      // ----------------------------------------------
+      // READ API RESPONSE
+      // ----------------------------------------------
+
+      const result = await response.json();
+
+      console.log("API Response:");
+      console.log(result);
+
+      // ----------------------------------------------
+      // CHECK API RESPONSE
+      // ----------------------------------------------
+
+      if (!response.ok || !result.success) {
+        console.error("API failed to save bill:", result);
+
+        alert(result.message || "Unable to save bill. Please try again.");
+
+        return;
+      }
+
+      // ----------------------------------------------
+      // SUCCESS
+      // ----------------------------------------------
+
+      console.log("=================================");
+      console.log("BILL SAVED SUCCESSFULLY");
+      console.log("=================================");
+
+      console.log("Saved Bill:", result.bill);
+
+      // ----------------------------------------------
+      // NOTIFY REPORT PAGE
+      // ----------------------------------------------
+      // Keep this event for your current report
+      // components. Later we will change the report
+      // to directly read from the API.
+
+      window.dispatchEvent(new Event("billsUpdated"));
+
+      // ----------------------------------------------
+      // SUCCESS MESSAGE
+      // ----------------------------------------------
+
+      alert("Bill Saved Successfully");
+
+      // ----------------------------------------------
+      // CREATE NEW BILL NUMBER
+      // ----------------------------------------------
+
+      setBillNo(Date.now());
+
+      // ----------------------------------------------
+      // CLEAR TABLE
+      // ----------------------------------------------
+
+      setItems(
+        Array.from({ length: 10 }, (_, index) => createEmptyRow(index + 1)),
+      );
+
+      // ----------------------------------------------
+      // RESET PAYMENT MODE
+      // ----------------------------------------------
+
+      setPaymentMode("Cash");
+    } catch (error) {
+      // ----------------------------------------------
+      // API / NETWORK ERROR
+      // ----------------------------------------------
+
+      console.error("Error calling Save Bill API:", error);
+
+      alert("Unable to save bill. Please check the server and try again.");
+    }
+  };
+
+  // ==================================================
+  // NEW BILL
+  // ==================================================
+
+  const handleNewBill = () => {
+    setBillNo(Date.now());
+
+    setPaymentMode("Cash");
 
     setItems(
       Array.from({ length: 10 }, (_, index) => createEmptyRow(index + 1)),
     );
   };
+
+  // ==================================================
+  // RESET BILL
+  // ==================================================
+
+  const handleReset = () => {
+    const confirmReset = window.confirm(
+      "Are you sure you want to reset this bill?",
+    );
+
+    if (!confirmReset) {
+      return;
+    }
+
+    setItems(
+      Array.from({ length: 10 }, (_, index) => createEmptyRow(index + 1)),
+    );
+  };
+
+  // ==================================================
+  // CANCEL BILL
+  // ==================================================
+
+  const handleCancel = () => {
+    const confirmCancel = window.confirm(
+      "Are you sure you want to cancel this bill?",
+    );
+
+    if (!confirmCancel) {
+      return;
+    }
+
+    setBillNo(Date.now());
+
+    setPaymentMode("Cash");
+
+    setItems(
+      Array.from({ length: 10 }, (_, index) => createEmptyRow(index + 1)),
+    );
+  };
+
+  // ==================================================
+  // PRINT BILL
+  // ==================================================
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  // ==================================================
+  // UI
+  // ==================================================
 
   return (
     <Box
@@ -108,26 +334,56 @@ export default function EntryPage() {
         bgcolor: "#f4f1b6",
       }}
     >
-      {/* Header */}
+      {/* ============================================
+          ENTRY HEADER
+      ============================================ */}
+
       <EntryHeader
         billNo={billNo}
         paymentMode={paymentMode}
         setPaymentMode={setPaymentMode}
       />
 
-      {/* Billing Table */}
+      {/* ============================================
+          BILLING TABLE
+      ============================================ */}
+
       <EntryTable items={items} setItems={setItems} />
 
-      {/* Add Rows */}
+      {/* ============================================
+          ADD ROW
+      ============================================ */}
+
       <AddRows items={items} setItems={setItems} />
 
-      {/* Bottom Panels */}
+      {/* ============================================
+          BOTTOM PANELS
+      ============================================ */}
+
       <Grid container spacing={1} mt={1}>
-        <Grid size={{ xs: 12, md: 4 }}>
+        {/* ==========================================
+            SELECTED SIZE
+        ========================================== */}
+
+        <Grid
+          size={{
+            xs: 12,
+            md: 4,
+          }}
+        >
           <SelectedSizePanel />
         </Grid>
 
-        <Grid size={{ xs: 12, md: 4 }}>
+        {/* ==========================================
+            CALCULATION
+        ========================================== */}
+
+        <Grid
+          size={{
+            xs: 12,
+            md: 4,
+          }}
+        >
           <CalculationPanel
             discount={discount}
             gst={gst}
@@ -136,19 +392,31 @@ export default function EntryPage() {
           />
         </Grid>
 
-        <Grid size={{ xs: 12, md: 4 }}>
+        {/* ==========================================
+            AMOUNT
+        ========================================== */}
+
+        <Grid
+          size={{
+            xs: 12,
+            md: 4,
+          }}
+        >
           <AmountPanel amount={grandTotal} />
         </Grid>
       </Grid>
 
-      {/* Footer Buttons */}
+      {/* ============================================
+          FOOTER BUTTONS
+      ============================================ */}
+
       <FooterButtons
         grandTotal={grandTotal}
         onSave={saveBill}
-        onPrint={() => window.print()}
-        onNewBill={() => console.log("New Bill")}
-        onReset={() => console.log("Reset")}
-        onCancel={() => console.log("Cancel")}
+        onPrint={handlePrint}
+        onNewBill={handleNewBill}
+        onReset={handleReset}
+        onCancel={handleCancel}
       />
     </Box>
   );

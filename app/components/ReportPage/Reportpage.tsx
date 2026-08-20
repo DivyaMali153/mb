@@ -1,5 +1,9 @@
 import { Box } from "@mui/material";
-import ReportHeader from "./ReportHeader";
+
+import ReportFilters from "../ReportPage/ReportFilters";
+import ReportHeader from "../ReportPage/ReportHeader";
+import ReportSummary from "../ReportPage/ReportSummary";
+import ReportTable from "../ReportPage/ReportTable";
 
 const ReportPage = () => {
   return (
@@ -11,6 +15,12 @@ const ReportPage = () => {
       }}
     >
       <ReportHeader />
+
+      <ReportFilters />
+
+      <ReportSummary />
+
+      <ReportTable />
     </Box>
   );
 };
