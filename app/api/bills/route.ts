@@ -1,26 +1,13 @@
 import { NextResponse } from "next/server";
 import { promises as fs } from "fs";
 import path from "path";
+import { randomUUID } from "crypto";
 
 export const runtime = "nodejs";
 
-// ==================================================
-// JSON FILE LOCATION
-// Your current structure:
-//
-// app
-// ├── api
-// │   └── bills
-// │       └── route.ts
-// └── data
-//     └── bills.json
-// ==================================================
-
 const filePath = path.join(process.cwd(), "app", "data", "bills.json");
 
-// ==================================================
-// TYPES
-// ==================================================
+type PaymentMode = "Cash" | "Online";
 
 interface BillItem {
   id: number;
@@ -35,209 +22,101 @@ interface BillItem {
   amount: number;
 }
 
-interface BillData {
+export interface BillData {
+  id: string;
   billNo: number;
   date: string;
-  paymentMode: "Cash" | "Online";
+  paymentMode: PaymentMode;
   total: number;
   items: BillItem[];
 }
 
-// ==================================================
-// READ BILLS
-// ==================================================
+function normalizeBill(raw: Partial<BillData>, index: number): BillData {
+  return {
+    id: String(raw.id || `legacy-${raw.billNo ?? "bill"}-${index}`),
+    billNo: Number(raw.billNo || 0),
+    date: String(raw.date || ""),
+    paymentMode: raw.paymentMode === "Online" ? "Online" : "Cash",
+    total: Number(raw.total || 0),
+    items: Array.isArray(raw.items) ? raw.items : [],
+  };
+}
 
 async function readBills(): Promise<BillData[]> {
-  try {
-    console.log("📂 Reading bills from:");
-    console.log(filePath);
+  const fileData = await fs.readFile(filePath, "utf-8");
+  if (!fileData.trim()) return [];
 
-    const fileData = await fs.readFile(filePath, "utf-8");
+  const parsed = JSON.parse(fileData);
+  if (!Array.isArray(parsed)) throw new Error("bills.json must contain an array");
 
-    console.log("📄 bills.json content:");
-    console.log(fileData);
+  const bills = parsed.map((bill, index) => normalizeBill(bill, index));
 
-    if (!fileData.trim()) {
-      return [];
-    }
-
-    const bills = JSON.parse(fileData);
-
-    if (!Array.isArray(bills)) {
-      console.error("❌ bills.json does not contain an array");
-
-      return [];
-    }
-
-    return bills;
-  } catch (error) {
-    console.error("❌ Error reading bills.json:", error);
-
-    throw error;
+  // One-time migration for old backup bills that do not have an id.
+  if (parsed.some((bill) => !bill?.id)) {
+    await writeBills(bills);
   }
-}
 
-// ==================================================
-// WRITE BILLS
-// ==================================================
+  return bills;
+}
 
 async function writeBills(bills: BillData[]) {
-  console.log("💾 Writing bills to:");
-  console.log(filePath);
-
   await fs.writeFile(filePath, JSON.stringify(bills, null, 2), "utf-8");
-
-  console.log("✅ bills.json written successfully");
 }
 
-// ==================================================
-// GET BILLS
-// ==================================================
+function validateBill(body: Partial<BillData>) {
+  if (!body || !body.billNo) return "Bill number is required";
+  if (!Array.isArray(body.items)) return "Bill items are required";
+  return null;
+}
 
 export async function GET() {
-  console.log("=================================");
-  console.log("🔥 GET /api/bills");
-  console.log("=================================");
-
   try {
     const bills = await readBills();
-
-    return NextResponse.json({
-      success: true,
-      bills,
-    });
+    return NextResponse.json({ success: true, bills });
   } catch (error) {
-    console.error("❌ GET /api/bills failed:", error);
-
+    console.error("GET /api/bills failed", error);
     return NextResponse.json(
-      {
-        success: false,
-        message: "Unable to read bills",
-      },
-      {
-        status: 500,
-      },
+      { success: false, message: "Unable to read bills" },
+      { status: 500 },
     );
   }
 }
 
-// ==================================================
-// SAVE BILL
-// ==================================================
-
+// Existing Save Bill functionality remains POST = CREATE.
 export async function POST(request: Request) {
-  console.log("=================================");
-  console.log("🔥 POST /api/bills CALLED");
-  console.log("=================================");
-
   try {
-    // ----------------------------------------------
-    // READ REQUEST
-    // ----------------------------------------------
+    const body = (await request.json()) as Partial<BillData>;
+    const validationError = validateBill(body);
 
-    const billData: BillData = await request.json();
-
-    console.log("📥 Bill received:");
-    console.log(billData);
-
-    // ----------------------------------------------
-    // VALIDATION
-    // ----------------------------------------------
-
-    if (!billData) {
+    if (validationError) {
       return NextResponse.json(
-        {
-          success: false,
-          message: "Bill data is required",
-        },
-        {
-          status: 400,
-        },
+        { success: false, message: validationError },
+        { status: 400 },
       );
     }
 
-    if (!billData.billNo) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Bill number is required",
-        },
-        {
-          status: 400,
-        },
-      );
-    }
+    const bills = await readBills();
+    const bill: BillData = {
+      id: String(body.id || randomUUID()),
+      billNo: Number(body.billNo),
+      date: String(body.date || new Date().toLocaleDateString()),
+      paymentMode: body.paymentMode === "Online" ? "Online" : "Cash",
+      total: Number(body.total || 0),
+      items: body.items || [],
+    };
 
-    if (!Array.isArray(billData.items)) {
-      return NextResponse.json(
-        {
-          success: false,
-          message: "Bill items are required",
-        },
-        {
-          status: 400,
-        },
-      );
-    }
-
-    // ----------------------------------------------
-    // READ OLD BILLS
-    // ----------------------------------------------
-
-    const oldBills = await readBills();
-
-    console.log("📚 Existing bills:");
-    console.log(oldBills);
-
-    // ----------------------------------------------
-    // ADD NEW BILL
-    // ----------------------------------------------
-
-    const updatedBills = [...oldBills, billData];
-
-    console.log("➕ New bills list:");
-    console.log(updatedBills);
-
-    // ----------------------------------------------
-    // SAVE TO JSON
-    // ----------------------------------------------
-
+    const updatedBills = [...bills, bill];
     await writeBills(updatedBills);
 
-    // ----------------------------------------------
-    // SUCCESS
-    // ----------------------------------------------
-
-    console.log("=================================");
-    console.log("✅ BILL SAVED SUCCESSFULLY");
-    console.log("=================================");
-
     return NextResponse.json(
-      {
-        success: true,
-        message: "Bill saved successfully",
-        bill: billData,
-        bills: updatedBills,
-      },
-      {
-        status: 201,
-      },
+      { success: true, message: "Bill saved successfully", bill, bills: updatedBills },
+      { status: 201 },
     );
   } catch (error) {
-    console.error("=================================");
-    console.error("❌ SAVE BILL API ERROR");
-    console.error("=================================");
-    console.error(error);
-
+    console.error("POST /api/bills failed", error);
     return NextResponse.json(
-      {
-        success: false,
-        message: "Unable to save bill",
-        error: error instanceof Error ? error.message : "Unknown error",
-      },
-      {
-        status: 500,
-      },
+      { success: false, message: "Unable to save bill" },
+      { status: 500 },
     );
   }
 }

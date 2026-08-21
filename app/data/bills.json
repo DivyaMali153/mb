@@ -1,9 +1,10 @@
 [
   {
+    "id": "legacy-1786447654543-0",
     "billNo": 1786447654543,
     "date": "11/08/2026",
     "paymentMode": "Cash",
-    "total": 3708,
+    "total": 3693.168,
     "items": [
       {
         "id": 1,
@@ -12,34 +13,15 @@
         "brand": "",
         "size": "s",
         "qty": 2,
-        "rate": 2000,
+        "rate": 1992,
         "discount": 10,
         "gst": 3,
-        "amount": 3708
+        "amount": 3693.168
       }
     ]
   },
   {
-    "billNo": 1786447694729,
-    "date": "11/08/2026",
-    "paymentMode": "Cash",
-    "total": 3708,
-    "items": [
-      {
-        "id": 1,
-        "barcode": "",
-        "itemName": "pant",
-        "brand": "",
-        "size": "s",
-        "qty": 2,
-        "rate": 2000,
-        "discount": 10,
-        "gst": 3,
-        "amount": 3708
-      }
-    ]
-  },
-  {
+    "id": "legacy-1786448296182-2",
     "billNo": 1786448296182,
     "date": "11/08/2026",
     "paymentMode": "Cash",
@@ -60,6 +42,7 @@
     ]
   },
   {
+    "id": "legacy-1786448375478-3",
     "billNo": 1786448375478,
     "date": "11/08/2026",
     "paymentMode": "Cash",
@@ -80,6 +63,7 @@
     ]
   },
   {
+    "id": "legacy-1786448927985-4",
     "billNo": 1786448927985,
     "date": "11/08/2026",
     "paymentMode": "Cash",
@@ -100,6 +84,7 @@
     ]
   },
   {
+    "id": "legacy-1786449933992-5",
     "billNo": 1786449933992,
     "date": "11/08/2026",
     "paymentMode": "Cash",

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Box, Grid } from "@mui/material";
 
 import EntryHeader from "./EntryHeader";
@@ -25,6 +25,7 @@ export interface BillItem {
 }
 
 export interface BillData {
+  id?: string;
   billNo: number;
   date: string;
   paymentMode: "Cash" | "Online";
@@ -57,6 +58,9 @@ export default function EntryPage() {
   // --------------------------------------------------
 
   const [paymentMode, setPaymentMode] = useState<"Cash" | "Online">("Cash");
+  const [editingBillId, setEditingBillId] = useState<string | null>(null);
+  const [billDate, setBillDate] = useState<string>(() => new Date().toLocaleDateString());
+  const [isLoadingBill, setIsLoadingBill] = useState(false);
 
   // --------------------------------------------------
   // BILL ITEMS
@@ -65,6 +69,66 @@ export default function EntryPage() {
   const [items, setItems] = useState<BillItem[]>(
     Array.from({ length: 10 }, (_, index) => createEmptyRow(index + 1)),
   );
+
+  // --------------------------------------------------
+  // LOAD BILL FOR EDIT MODE
+  // --------------------------------------------------
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const editId = params.get("edit");
+
+    if (!editId) {
+      setEditingBillId(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadBill = async () => {
+      try {
+        setIsLoadingBill(true);
+        const response = await fetch(`/api/bills/${encodeURIComponent(editId)}`, {
+          cache: "no-store",
+        });
+        const result = await response.json();
+
+        if (!response.ok || !result.success || !result.bill) {
+          throw new Error(result.message || "Unable to load bill");
+        }
+
+        if (cancelled) return;
+
+        const bill = result.bill as BillData;
+        setEditingBillId(bill.id || editId);
+        setBillNo(bill.billNo);
+        setBillDate(bill.date);
+        setPaymentMode(bill.paymentMode);
+        setItems(
+          [
+            ...bill.items,
+            ...Array.from(
+              { length: Math.max(0, 10 - bill.items.length) },
+              (_, index) => createEmptyRow(bill.items.length + index + 1),
+            ),
+          ],
+        );
+      } catch (error) {
+        console.error("Unable to load bill for edit", error);
+        alert(error instanceof Error ? error.message : "Unable to load bill");
+        window.history.replaceState({}, "", "/billSystem/my-bills");
+        setEditingBillId(null);
+      } finally {
+        if (!cancelled) setIsLoadingBill(false);
+      }
+    };
+
+    loadBill();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // --------------------------------------------------
   // DISCOUNT CALCULATION
@@ -145,9 +209,10 @@ export default function EntryPage() {
     // ------------------------------------------------
 
     const billData: BillData = {
-      billNo: billNo,
-      date: new Date().toLocaleDateString(),
-      paymentMode: paymentMode,
+      ...(editingBillId ? { id: editingBillId } : {}),
+      billNo,
+      date: editingBillId ? billDate : new Date().toLocaleDateString(),
+      paymentMode,
       total: grandTotal,
       items: validItems,
     };
@@ -168,13 +233,13 @@ export default function EntryPage() {
       // CALL SAVE BILL API
       // ----------------------------------------------
 
-      const response = await fetch("/api/bills", {
-        method: "POST",
+      const endpoint = editingBillId
+        ? `/api/bills/${encodeURIComponent(editingBillId)}`
+        : "/api/bills";
 
-        headers: {
-          "Content-Type": "application/json",
-        },
-
+      const response = await fetch(endpoint, {
+        method: editingBillId ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(billData),
       });
 
@@ -228,13 +293,16 @@ export default function EntryPage() {
       // SUCCESS MESSAGE
       // ----------------------------------------------
 
-      alert("Bill Saved Successfully");
+      alert(editingBillId ? "Bill Updated Successfully" : "Bill Saved Successfully");
 
       // ----------------------------------------------
-      // CREATE NEW BILL NUMBER
+      // RETURN TO NEW-BILL MODE AFTER SAVE/UPDATE
       // ----------------------------------------------
 
+      setEditingBillId(null);
+      window.history.replaceState({}, "", "/billSystem/my-bills");
       setBillNo(Date.now());
+      setBillDate(new Date().toLocaleDateString());
 
       // ----------------------------------------------
       // CLEAR TABLE
@@ -266,6 +334,7 @@ export default function EntryPage() {
 
   const handleNewBill = () => {
     setBillNo(Date.now());
+    setBillDate(new Date().toLocaleDateString());
 
     setPaymentMode("Cash");
 
@@ -306,6 +375,7 @@ export default function EntryPage() {
     }
 
     setBillNo(Date.now());
+    setBillDate(new Date().toLocaleDateString());
 
     setPaymentMode("Cash");
 
@@ -334,6 +404,10 @@ export default function EntryPage() {
         bgcolor: "#f4f1b6",
       }}
     >
+      {isLoadingBill && (
+        <Box sx={{ p: 2, textAlign: "center", fontWeight: 700 }}>Loading bill...</Box>
+      )}
+
       {/* ============================================
           ENTRY HEADER
       ============================================ */}
