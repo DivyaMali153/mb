@@ -12,17 +12,17 @@ import {
 
 interface EntryHeaderProps {
   billNo: number;
+  date: string;
   paymentMode: "Cash" | "Online";
   setPaymentMode: Dispatch<SetStateAction<"Cash" | "Online">>;
 }
 
 export default function EntryHeader({
   billNo,
+  date,
   paymentMode,
   setPaymentMode,
 }: EntryHeaderProps) {
-  const today = new Date().toLocaleDateString();
-
   return (
     <Card
       elevation={2}
@@ -59,7 +59,7 @@ export default function EntryHeader({
           <TextField
             fullWidth
             size="small"
-            value={today}
+            value={date}
             InputProps={{
               readOnly: true,
             }}

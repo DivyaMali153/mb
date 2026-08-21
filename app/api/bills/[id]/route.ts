@@ -1,162 +1,114 @@
 import { NextResponse } from "next/server";
-import { promises as fs } from "fs";
-import path from "path";
+import {
+  billsFilePath,
+  inventoryFilePath,
+  readJson,
+  writeJson,
+  withStoreLock,
+  type BillData,
+  type InventoryItem,
+  normalizeInventoryItem,
+  diffSaleQuantities,
+  applySaleDelta,
+  aggregateBillQuantities,
+} from "../../_lib/billingStore";
 
 export const runtime = "nodejs";
 
-const filePath = path.join(process.cwd(), "app", "data", "bills.json");
+type Params = { params: Promise<{ id: string }> };
 
-type PaymentMode = "Cash" | "Online";
-
-interface BillItem {
-  id: number;
-  barcode: string;
-  itemName: string;
-  brand: string;
-  size: string;
-  qty: number;
-  rate: number;
-  discount: number;
-  gst: number;
-  amount: number;
+async function readBills() {
+  const bills = await readJson<BillData[]>(billsFilePath, []);
+  return Array.isArray(bills) ? bills : [];
 }
 
-interface BillData {
-  id: string;
-  billNo: number;
-  date: string;
-  paymentMode: PaymentMode;
-  total: number;
-  items: BillItem[];
+async function readInventory() {
+  const items = await readJson<InventoryItem[]>(inventoryFilePath, []);
+  return Array.isArray(items) ? items.map(normalizeInventoryItem) : [];
 }
 
-async function readBills(): Promise<BillData[]> {
-  const raw = await fs.readFile(filePath, "utf-8");
-  const parsed = raw.trim() ? JSON.parse(raw) : [];
-  if (!Array.isArray(parsed)) throw new Error("bills.json must contain an array");
-
-  let changed = false;
-  const bills = parsed.map((bill: Partial<BillData>, index: number) => {
-    if (!bill.id) changed = true;
-    return {
-      id: String(bill.id || `legacy-${bill.billNo ?? "bill"}-${index}`),
-      billNo: Number(bill.billNo || 0),
-      date: String(bill.date || ""),
-      paymentMode: bill.paymentMode === "Online" ? "Online" : "Cash",
-      total: Number(bill.total || 0),
-      items: Array.isArray(bill.items) ? bill.items : [],
-    } as BillData;
-  });
-
-  if (changed) await writeBills(bills);
-  return bills;
+function findBill(bills: BillData[], id: string) {
+  return bills.findIndex((bill) => bill.id === id || (!bill.id && String(bill.billNo) === id));
 }
 
-async function writeBills(bills: BillData[]) {
-  await fs.writeFile(filePath, JSON.stringify(bills, null, 2), "utf-8");
-}
-
-function getId(context: { params: Promise<{ id: string }> }) {
-  return context.params.then(({ id }) => decodeURIComponent(id));
-}
-
-function validate(body: Partial<BillData>) {
-  if (!body?.billNo) return "Bill number is required";
-  if (!Array.isArray(body.items)) return "Bill items are required";
-  return null;
-}
-
-export async function GET(
-  _request: Request,
-  context: { params: Promise<{ id: string }> },
-) {
+export async function GET(_request: Request, { params }: Params) {
   try {
-    const id = await getId(context);
+    const { id } = await params;
     const bills = await readBills();
-    const bill = bills.find((item) => item.id === id);
-
-    if (!bill) {
-      return NextResponse.json({ success: false, message: "Bill not found" }, { status: 404 });
-    }
-
-    return NextResponse.json({ success: true, bill });
-  } catch (error) {
-    console.error("GET /api/bills/[id] failed", error);
-    return NextResponse.json({ success: false, message: "Unable to read bill" }, { status: 500 });
+    const index = findBill(bills, id);
+    if (index < 0) return NextResponse.json({ success: false, message: "Bill not found" }, { status: 404 });
+    return NextResponse.json({ success: true, bill: bills[index] });
+  } catch {
+    return NextResponse.json({ success: false, message: "Unable to load bill" }, { status: 500 });
   }
 }
 
-// UPDATE existing bill. This never creates a duplicate.
-export async function PUT(
-  request: Request,
-  context: { params: Promise<{ id: string }> },
-) {
+export async function PUT(request: Request, { params }: Params) {
   try {
-    const id = await getId(context);
-    const body = (await request.json()) as Partial<BillData>;
-    const validationError = validate(body);
+    const { id } = await params;
+    const incoming = await request.json() as BillData;
+    const result = await withStoreLock(async () => {
+      const bills = await readBills();
+      const inventory = await readInventory();
+      const index = findBill(bills, id);
+      if (index < 0) return { status: 404, body: { success: false, message: "Bill not found" } };
+      if (!Array.isArray(incoming.items) || incoming.items.length === 0) return { status: 400, body: { success: false, message: "At least one bill item is required" } };
 
-    if (validationError) {
-      return NextResponse.json({ success: false, message: validationError }, { status: 400 });
-    }
+      const current = bills[index];
+      const updatedBill: BillData = { ...current, ...incoming, id: current.id || id };
+      const duplicateBill = bills.find((bill, billIndex) => billIndex !== index && bill.billNo === updatedBill.billNo);
+      if (duplicateBill) return { status: 409, body: { success: false, message: `Bill No ${updatedBill.billNo} already exists.` } };
 
-    const bills = await readBills();
-    const index = bills.findIndex((item) => item.id === id);
+      const delta = diffSaleQuantities(inventory, current, updatedBill);
+      const updatedInventory = applySaleDelta(inventory, delta);
+      const updatedBills = bills.map((bill, billIndex) => billIndex === index ? updatedBill : bill);
 
-    if (index === -1) {
-      return NextResponse.json({ success: false, message: "Bill not found" }, { status: 404 });
-    }
+      await writeJson(inventoryFilePath, updatedInventory);
+      try {
+        await writeJson(billsFilePath, updatedBills);
+      } catch (error) {
+        await writeJson(inventoryFilePath, inventory);
+        throw error;
+      }
 
-    const updatedBill: BillData = {
-      id,
-      billNo: Number(body.billNo),
-      date: String(body.date || bills[index].date),
-      paymentMode: body.paymentMode === "Online" ? "Online" : "Cash",
-      total: Number(body.total || 0),
-      items: body.items || [],
-    };
-
-    const updatedBills = [...bills];
-    updatedBills[index] = updatedBill;
-    await writeBills(updatedBills);
-
-    return NextResponse.json({
-      success: true,
-      message: "Bill updated successfully",
-      bill: updatedBill,
-      bills: updatedBills,
+      return { status: 200, body: { success: true, message: "Bill updated and stock adjusted successfully", bill: updatedBill, bills: updatedBills } };
     });
+    return NextResponse.json(result.body, { status: result.status });
   } catch (error) {
     console.error("PUT /api/bills/[id] failed", error);
-    return NextResponse.json({ success: false, message: "Unable to update bill" }, { status: 500 });
+    return NextResponse.json({ success: false, message: error instanceof Error ? error.message : "Unable to update bill" }, { status: 400 });
   }
 }
 
-// DELETE only the exact bill id supplied by the Report Page.
-export async function DELETE(
-  _request: Request,
-  context: { params: Promise<{ id: string }> },
-) {
+export async function DELETE(_request: Request, { params }: Params) {
   try {
-    const id = await getId(context);
-    const bills = await readBills();
-    const bill = bills.find((item) => item.id === id);
+    const { id } = await params;
+    const result = await withStoreLock(async () => {
+      const bills = await readBills();
+      const inventory = await readInventory();
+      const index = findBill(bills, id);
+      if (index < 0) return { status: 404, body: { success: false, message: "Bill not found" } };
 
-    if (!bill) {
-      return NextResponse.json({ success: false, message: "Bill not found" }, { status: 404 });
-    }
+      const bill = bills[index];
+      const sold = aggregateBillQuantities(inventory, bill);
+      const restoreDelta = new Map<string, number>();
+      for (const [inventoryId, qty] of sold.entries()) restoreDelta.set(inventoryId, -qty);
+      const updatedInventory = applySaleDelta(inventory, restoreDelta);
+      const updatedBills = bills.filter((_entry, billIndex) => billIndex !== index);
 
-    const updatedBills = bills.filter((item) => item.id !== id);
-    await writeBills(updatedBills);
+      await writeJson(inventoryFilePath, updatedInventory);
+      try {
+        await writeJson(billsFilePath, updatedBills);
+      } catch (error) {
+        await writeJson(inventoryFilePath, inventory);
+        throw error;
+      }
 
-    return NextResponse.json({
-      success: true,
-      message: "Bill deleted successfully",
-      deletedBillId: id,
-      bills: updatedBills,
+      return { status: 200, body: { success: true, message: "Bill deleted and stock restored successfully", bills: updatedBills } };
     });
+    return NextResponse.json(result.body, { status: result.status });
   } catch (error) {
     console.error("DELETE /api/bills/[id] failed", error);
-    return NextResponse.json({ success: false, message: "Unable to delete bill" }, { status: 500 });
+    return NextResponse.json({ success: false, message: error instanceof Error ? error.message : "Unable to delete bill" }, { status: 400 });
   }
 }

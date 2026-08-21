@@ -22,6 +22,10 @@ const menu = [
     path: "/billSystem/my-bills",
   },
   {
+    name: "Inventory",
+    path: "/billSystem/inventory",
+  },
+  {
     name: "Profile",
     path: "/billSystem/profile",
   },

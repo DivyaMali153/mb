@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Box } from "@mui/material";
 
 import EntryTabs from "./EntryTabs";
@@ -11,7 +12,14 @@ import NxReport from "./Nxreport";
 import ReportPage from "./Reportpage";
 
 export default function MyBills() {
-  const [activeTab, setActiveTab] = useState(0);
+  const searchParams = useSearchParams();
+  const initialTab = Number(searchParams.get("tab") ?? 0);
+  const [activeTab, setActiveTab] = useState(Number.isFinite(initialTab) && initialTab >= 0 && initialTab <= 3 ? initialTab : 0);
+
+  useEffect(() => {
+    const nextTab = Number(searchParams.get("tab") ?? 0);
+    if (Number.isFinite(nextTab) && nextTab >= 0 && nextTab <= 3) setActiveTab(nextTab);
+  }, [searchParams]);
 
   return (
     <Box

@@ -1,0 +1,36 @@
+[
+  {
+    "id": "b5983fbe-a7d9-4f7a-97f9-68d47ff6cfe1",
+    "barcode": "",
+    "itemName": "shirts",
+    "brand": "Ramraj",
+    "size": "xl",
+    "openingStock": 1000,
+    "quantity": 1000,
+    "availableStock": 1000,
+    "soldQuantity": 0,
+    "purchasePrice": 1000,
+    "sellingPrice": 1200,
+    "gst": 3,
+    "reorderLevel": 0,
+    "createdAt": "2026-08-21T13:26:19.464Z",
+    "updatedAt": "2026-08-21T13:27:03.859Z"
+  },
+  {
+    "id": "f4d161d1-0d58-49d1-844f-eeaafc0c8f1a",
+    "barcode": "",
+    "itemName": "dress",
+    "brand": "sakhi",
+    "size": "M",
+    "openingStock": 500,
+    "quantity": 495,
+    "availableStock": 495,
+    "soldQuantity": 5,
+    "purchasePrice": 700,
+    "sellingPrice": 1000,
+    "gst": 5,
+    "reorderLevel": 0,
+    "createdAt": "2026-08-21T13:28:07.200Z",
+    "updatedAt": "2026-08-21T13:28:50.312Z"
+  }
+]

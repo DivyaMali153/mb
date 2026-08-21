@@ -24,3 +24,22 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+.inventory-report-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 850px;
+}
+.inventory-report-table th,
+.inventory-report-table td {
+  border: 1px solid #d5d5d5;
+  padding: 10px;
+  text-align: left;
+}
+.inventory-report-table th {
+  background: #e6dfa5;
+  font-weight: 700;
+}
+.inventory-report-table tbody tr:hover {
+  background: #fffde7;
+}

@@ -1,122 +1,74 @@
 import { NextResponse } from "next/server";
-import { promises as fs } from "fs";
-import path from "path";
-import { randomUUID } from "crypto";
+import {
+  billsFilePath,
+  inventoryFilePath,
+  readJson,
+  writeJson,
+  withStoreLock,
+  type BillData,
+  type InventoryItem,
+  normalizeInventoryItem,
+  diffSaleQuantities,
+  applySaleDelta,
+} from "../_lib/billingStore";
 
 export const runtime = "nodejs";
 
-const filePath = path.join(process.cwd(), "app", "data", "bills.json");
-
-type PaymentMode = "Cash" | "Online";
-
-interface BillItem {
-  id: number;
-  barcode: string;
-  itemName: string;
-  brand: string;
-  size: string;
-  qty: number;
-  rate: number;
-  discount: number;
-  gst: number;
-  amount: number;
+async function readBills() {
+  const bills = await readJson<BillData[]>(billsFilePath, []);
+  return Array.isArray(bills) ? bills : [];
 }
 
-export interface BillData {
-  id: string;
-  billNo: number;
-  date: string;
-  paymentMode: PaymentMode;
-  total: number;
-  items: BillItem[];
-}
-
-function normalizeBill(raw: Partial<BillData>, index: number): BillData {
-  return {
-    id: String(raw.id || `legacy-${raw.billNo ?? "bill"}-${index}`),
-    billNo: Number(raw.billNo || 0),
-    date: String(raw.date || ""),
-    paymentMode: raw.paymentMode === "Online" ? "Online" : "Cash",
-    total: Number(raw.total || 0),
-    items: Array.isArray(raw.items) ? raw.items : [],
-  };
-}
-
-async function readBills(): Promise<BillData[]> {
-  const fileData = await fs.readFile(filePath, "utf-8");
-  if (!fileData.trim()) return [];
-
-  const parsed = JSON.parse(fileData);
-  if (!Array.isArray(parsed)) throw new Error("bills.json must contain an array");
-
-  const bills = parsed.map((bill, index) => normalizeBill(bill, index));
-
-  // One-time migration for old backup bills that do not have an id.
-  if (parsed.some((bill) => !bill?.id)) {
-    await writeBills(bills);
-  }
-
-  return bills;
-}
-
-async function writeBills(bills: BillData[]) {
-  await fs.writeFile(filePath, JSON.stringify(bills, null, 2), "utf-8");
-}
-
-function validateBill(body: Partial<BillData>) {
-  if (!body || !body.billNo) return "Bill number is required";
-  if (!Array.isArray(body.items)) return "Bill items are required";
-  return null;
+async function readInventory() {
+  const items = await readJson<InventoryItem[]>(inventoryFilePath, []);
+  return Array.isArray(items) ? items.map(normalizeInventoryItem) : [];
 }
 
 export async function GET() {
   try {
-    const bills = await readBills();
-    return NextResponse.json({ success: true, bills });
+    return NextResponse.json({ success: true, bills: await readBills() });
   } catch (error) {
     console.error("GET /api/bills failed", error);
-    return NextResponse.json(
-      { success: false, message: "Unable to read bills" },
-      { status: 500 },
-    );
+    return NextResponse.json({ success: false, message: "Unable to read bills" }, { status: 500 });
   }
 }
 
-// Existing Save Bill functionality remains POST = CREATE.
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as Partial<BillData>;
-    const validationError = validateBill(body);
+    const incoming = await request.json() as BillData;
+    if (!incoming?.billNo) return NextResponse.json({ success: false, message: "Bill number is required" }, { status: 400 });
+    if (!Array.isArray(incoming.items) || incoming.items.length === 0) return NextResponse.json({ success: false, message: "At least one bill item is required" }, { status: 400 });
 
-    if (validationError) {
-      return NextResponse.json(
-        { success: false, message: validationError },
-        { status: 400 },
-      );
-    }
+    const result = await withStoreLock(async () => {
+      const bills = await readBills();
+      const inventory = await readInventory();
+      const bill: BillData = { ...incoming, id: incoming.id || crypto.randomUUID() };
 
-    const bills = await readBills();
-    const bill: BillData = {
-      id: String(body.id || randomUUID()),
-      billNo: Number(body.billNo),
-      date: String(body.date || new Date().toLocaleDateString()),
-      paymentMode: body.paymentMode === "Online" ? "Online" : "Cash",
-      total: Number(body.total || 0),
-      items: body.items || [],
-    };
+      if (bills.some((entry) => entry.id === bill.id || (!entry.id && entry.billNo === bill.billNo) || entry.billNo === bill.billNo)) {
+        throw new Error(`Bill No ${bill.billNo} already exists. Please use a new bill number.`);
+      }
 
-    const updatedBills = [...bills, bill];
-    await writeBills(updatedBills);
+      const delta = diffSaleQuantities(inventory, null, bill);
+      const updatedInventory = applySaleDelta(inventory, delta);
+      const updatedBills = [...bills, bill];
 
-    return NextResponse.json(
-      { success: true, message: "Bill saved successfully", bill, bills: updatedBills },
-      { status: 201 },
-    );
+      // Both files are written while the process lock is held. If the second write fails,
+      // restore the first file so a failed sale does not leave stock partially changed.
+      await writeJson(inventoryFilePath, updatedInventory);
+      try {
+        await writeJson(billsFilePath, updatedBills);
+      } catch (error) {
+        await writeJson(inventoryFilePath, inventory);
+        throw error;
+      }
+
+      return { bill, updatedBills, updatedInventory };
+    });
+
+    return NextResponse.json({ success: true, message: "Bill saved and stock updated successfully", bill: result.bill, bills: result.updatedBills }, { status: 201 });
   } catch (error) {
     console.error("POST /api/bills failed", error);
-    return NextResponse.json(
-      { success: false, message: "Unable to save bill" },
-      { status: 500 },
-    );
+    const message = error instanceof Error ? error.message : "Unable to save bill";
+    return NextResponse.json({ success: false, message }, { status: 400 });
   }
 }

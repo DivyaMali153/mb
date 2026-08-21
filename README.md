@@ -34,3 +34,17 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Inventory API
+
+Inventory is API-driven; the UI does not contain static inventory records.
+
+- `GET /api/inventory` - all inventory. Optional `search`, `itemName`, `size`.
+- `POST /api/inventory` - add inventory item.
+- `GET /api/inventory/:id` - get one inventory item.
+- `PUT /api/inventory/:id` - update one inventory item.
+- `DELETE /api/inventory/:id` - delete one inventory item.
+- `GET /api/inventory?report=item&itemName=...` - item-wise stock report.
+- `GET /api/inventory?report=size&itemName=...&size=...` - size-wise stock report.
+
+The Bill Entry Item Name field calls `GET /api/inventory?search=<typed text>` and selecting an inventory item fills barcode, brand, size, selling price/rate and GST from the API response.
